@@ -1,3 +1,5 @@
+import logging
+
 from tqdm.autonotebook import tqdm
 from importlib.util import find_spec
 import numbers
@@ -54,6 +56,7 @@ __all__ = [
 
 from .core.utils.constants import REQUIRED_VECTOR_FIELDS, OPTIONAL_VECTOR_FIELDS
 from .core.utils.error_handling import validate_and_convert_errors
+from .stopwatch import track, reset
 
 _OPENAPI_ENDPOINT_PARAMS = (
     "_return_http_data_only",
@@ -455,6 +458,7 @@ class Index(ApiClient):
         Returns: QueryResponse object which contains the list of the closest vectors as ScoredVector objects,
                  and namespace name.
         """
+        logging.debug(f"Started executing a Pinecone query: {track('query'):.3f}")
 
         def _query_transform(item):
             if isinstance(item, QueryVector):
@@ -494,7 +498,11 @@ class Index(ApiClient):
             ),
             **{k: v for k, v in kwargs.items() if k in _OPENAPI_ENDPOINT_PARAMS},
         )
-        return parse_query_response(response, vector is not None or id)
+        logging.debug(f"Vector API returned a response: {track('query'):.3f}")
+        parsed_response = parse_query_response(response, vector is not None or id)
+        logging.debug(f"Parsed query response: {track('query'):.3f}")
+        reset("query")
+        return parsed_response
 
     @validate_and_convert_errors
     def update(

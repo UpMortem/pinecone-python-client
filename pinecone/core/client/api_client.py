@@ -11,6 +11,7 @@
 
 import json
 import atexit
+import logging
 import mimetypes
 from multiprocessing.pool import ThreadPool
 import io
@@ -38,6 +39,7 @@ from pinecone.core.client.model_utils import (
     none_type,
     validate_and_convert_types,
 )
+from pinecone.stopwatch import track
 
 
 class ApiClient(object):
@@ -181,6 +183,7 @@ class ApiClient(object):
             url = _host + resource_path
 
         try:
+            logging.debug(f"api_client.__call_api calling self.request: {track('query'):.3f}")
             # perform request and return response
             response_data = self.request(
                 method,
@@ -195,6 +198,7 @@ class ApiClient(object):
         except ApiException as e:
             e.body = e.body.decode("utf-8")
             raise e
+        logging.debug(f"api_client.__call_api finished the request: {track('query'):.3f}")
 
         self.last_response = response_data
 
@@ -204,8 +208,10 @@ class ApiClient(object):
             return return_data
             return return_data
 
+        logging.debug(f"api_client.__call_api starting deserialization: {track('query'):.3f}")
         # deserialize response data
         if response_type:
+            logging.debug(f"api_client.__call_api response_type {str(response_type)}: {track('query'):.3f}")
             if response_type != (file_type,):
                 encoding = "utf-8"
                 content_type = response_data.getheader("content-type")
@@ -213,11 +219,14 @@ class ApiClient(object):
                     match = re.search(r"charset=([a-zA-Z\-\d]+)[\s\;]?", content_type)
                     if match:
                         encoding = match.group(1)
+                logging.debug(f"api_client.__call_api response_data.data.decode({encoding}): {track('query'):.3f}")
                 response_data.data = response_data.data.decode(encoding)
 
+            logging.debug(f"api_client.__call_api calling self.deserialize: {track('query'):.3f}")
             return_data = self.deserialize(response_data, response_type, _check_type)
         else:
             return_data = None
+        logging.debug(f"api_client.__call_api finished deserialization: {track('query'):.3f}")
 
         if _return_http_data_only:
             return return_data
@@ -297,20 +306,27 @@ class ApiClient(object):
         # handle file downloading
         # save response body into a tmp file and return the instance
         if response_type == (file_type,):
+            logging.debug(f"api_client.deserialize Start: handle file downloading: {track('query'):.3f}")
             content_disposition = response.getheader("Content-Disposition")
-            return deserialize_file(response.data, self.configuration, content_disposition=content_disposition)
+            res = deserialize_file(response.data, self.configuration, content_disposition=content_disposition)
+            logging.debug(f"api_client.deserialize Finish: handle file downloading: {track('query'):.3f}")
+            return res
 
         # fetch data from response object
         try:
+            logging.debug(f"api_client.deserialize Start: fetch data from response object: {track('query'):.3f}")
             received_data = json.loads(response.data)
+            logging.debug(f"api_client.deserialize Finish: fetch data from response object: {track('query'):.3f}")
         except ValueError:
             received_data = response.data
 
         # store our data under the key of 'received_data' so users have some
         # context if they are deserializing a string and the data type is wrong
+        logging.debug(f"api_client.deserialize Start: validate_and_convert_types: {track('query'):.3f}")
         deserialized_data = validate_and_convert_types(
             received_data, response_type, ["received_data"], True, _check_type, configuration=self.configuration
         )
+        logging.debug(f"api_client.deserialize Finish: validate_and_convert_types: {track('query'):.3f}")
         return deserialized_data
 
     def call_api(
