@@ -26,7 +26,7 @@ from pinecone.core.client.exceptions import (
     ServiceException,
     ApiValueError,
 )
-
+from pinecone.stopwatch import track
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,7 @@ class RESTClientObject(object):
         _preload_content=True,
         _request_timeout=None,
     ):
+        logging.debug(f"Starting rest[{method}] request: {track('query'):.3f}")
         """Perform requests.
 
         :param method: http request method
@@ -211,9 +212,11 @@ class RESTClientObject(object):
                     raise ApiException(status=0, reason=msg)
             # For `GET`, `HEAD`
             else:
+                logging.debug(f"Calling pool_manager for [{method}] request: {track('query'):.3f}")
                 r = self.pool_manager.request(
                     method, url, fields=query_params, preload_content=_preload_content, timeout=timeout, headers=headers
                 )
+                logging.debug(f"pool_manager returned a response for [{method}] request: {track('query'):.3f}")
         except urllib3.exceptions.SSLError as e:
             msg = "{0}\n{1}".format(type(e).__name__, str(e))
             raise ApiException(status=0, reason=msg)
@@ -223,6 +226,7 @@ class RESTClientObject(object):
 
             # log response body
             logger.debug("response body: %s", r.data)
+            logging.debug(f"Response body for [{method}] request: {track('query'):.3f}")
 
         if not 200 <= r.status <= 299:
             if r.status == 401:
